@@ -26,11 +26,25 @@
 
 import SwiftUI
 
+public enum CITPincodeValidationState: Hashable {
+    case normal
+    case error(String? = nil)
+
+    public var hasError: Bool {
+        switch self {
+        case .normal:
+            return false
+        case .error:
+            return true
+        }
+    }
+}
+
 /// The CITPincodeView provides a simple One Time Passcode interface with deep customization through its config.
 /// It includes an optional resend code button with built-in cooldown logic, an error label that's dynamically shown and error color tints, callbacks for when a code has been entered and when the resend code button is pressed and long press to paste logic that filters hyphens and denies codes of the wrong type, e.g. pasting letters into a numeric code.
 public struct CITPincodeView: View {
     @Binding var code: String
-    @Binding var error: String?
+    @Binding var validationState: CITPincodeValidationState
     @Binding var forceCooldownOnce: Bool
     
     private let config: CITPincodeView.Configuration
@@ -41,28 +55,24 @@ public struct CITPincodeView: View {
     @State private var codeInputField: UITextField?
     @State private var shownKeyboardOnceInitially = false
     
-    var hasError: Bool {
-        error != nil
-    }
-    
     /// Intialise the pincode view with bindings, a config and callbacks.
     /// - Parameters:
     ///   - code: Text binding for code input.
-    ///   - error: Optional error binding for displaying error messages below the pincode view and showing error tint colors.
+    ///   - validation: A validation state binding for displaying error messages (if applicable) below the pincode view and showing error tint colors.
     ///   - forceCooldownOnce: Used to trigger resendButton cooldown once whenever set to true. This may be useful if you'd like to manually send a code onAppear or any other moment, so that the resendButton goes on cooldown when appropriate.
     ///   - config: Used to configure various visual and functional aspects of the pincode view.
     ///   - onEnteredCode: Called when a code has been entered, i.e. "code.count" equals "config.codeLength".
     ///   - onResendCode: Called when the resend code button is pressed, the button is disabled on press for the given cooldown duration.
     public init(
         code: Binding<String>,
-        error: Binding<String?> = .constant(nil),
+        validationState: Binding<CITPincodeValidationState> = .constant(.normal),
         forceCooldownOnce: Binding<Bool>,
         config: CITPincodeView.Configuration,
         onEnteredCode: @escaping () -> Void,
         onResendCode: @escaping () -> Void
     ) {
         _code = code
-        _error = error
+        _validationState = validationState
         _forceCooldownOnce = forceCooldownOnce
         self.config = config
         self.onEnteredCode = onEnteredCode
@@ -78,7 +88,7 @@ public struct CITPincodeView: View {
                         character: character(for: index),
                         placeholder: placeholder(for: index),
                         isSelected: index == code.count,
-                        hasError: hasError
+                        hasError: validationState.hasError
                     )
                     
                     if config.dividerStyle.afterIndex == index {
@@ -123,18 +133,18 @@ public struct CITPincodeView: View {
                 code = String(newValue.prefix(config.codeLength))
             } else if newValue.count < config.codeLength {
                 enteredCode = ""
-                error = nil
+                validationState = .normal
             }
         }
     }
     
     @ViewBuilder
     private var optionalErrorLabel: some View {
-        if let error = error {
-            Text(error)
+        if case .error(let text) = validationState, let text {
+            Text(text)
                 .foregroundColor(config.errorColor)
                 .font(config.errorFont)
-                .accessibility(label: Text(error))
+                .accessibility(label: Text(text))
         }
     }
     
